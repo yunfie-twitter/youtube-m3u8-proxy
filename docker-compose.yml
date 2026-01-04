@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Node.js API Server (youtube.js)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: youtube-proxy-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - YTDLP_API_URL=http://ytdlp:8080
+      - CACHE_TTL=3600
+      - CACHE_MAX_SIZE=1000
+    depends_on:
+      - ytdlp
+      - redis
+    restart: unless-stopped
+    networks:
+      - youtube-proxy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Python yt-dlp API Server
+  ytdlp:
+    build:
+      context: ./ytdlp-service
+      dockerfile: Dockerfile
+    container_name: youtube-proxy-ytdlp
+    environment:
+      - PORT=8080
+      - WORKERS=4
+    restart: unless-stopped
+    networks:
+      - youtube-proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: youtube-proxy-redis
+    restart: unless-stopped
+    networks:
+      - youtube-proxy
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  youtube-proxy:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

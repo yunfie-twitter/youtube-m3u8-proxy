@@ -18,10 +18,13 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV YTDLP_API_URL=http://ytdlp:8080
+ENV CACHE_TTL=3600
+ENV CACHE_MAX_SIZE=1000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start server
-CMD ["node", "src/server.js"]
+# Start hybrid server
+CMD ["node", "src/server-hybrid.js"]
