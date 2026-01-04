@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube M3U8 Proxy - Demo</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .video-container {
+            background: black;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .video-js {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16/9;
+        }
+        
+        .info-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .info-item {
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        
+        .info-item strong {
+            display: block;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .info-item span {
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .examples {
+            margin-top: 15px;
+        }
+        
+        .examples h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .example-link {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #333;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .example-link:hover {
+            background: #e0e0e0;
+        }
+        
+        .error {
+            padding: 15px;
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            border-radius: 4px;
+            color: #c62828;
+            margin-bottom: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        
+        .api-info {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .api-info code {
+            background: rgba(0,0,0,0.05);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 YouTube M3U8 Proxy</h1>
+            <p class="subtitle">Stream YouTube videos via HLS without API keys</p>
+        </header>
+        
+        <div class="card">
+            <div class="input-group">
+                <input type="text" id="videoInput" placeholder="YouTube動画ID または URL を入力 (例: dQw4w9WgXcQ)" />
+                <button onclick="loadVideo()">読み込み</button>
+            </div>
+            
+            <div class="examples">
+                <h3>📌 サンプル動画:</h3>
+                <a href="#" class="example-link" onclick="loadExample('dQw4w9WgXcQ'); return false;">Rick Astley - Never Gonna Give You Up</a>
+                <a href="#" class="example-link" onclick="loadExample('jNQXAC9IVRw'); return false;">Me at the zoo</a>
+            </div>
+            
+            <div id="error" class="error" style="display:none;"></div>
+            <div id="loading" class="loading" style="display:none;">読み込み中...</div>
+            
+            <div id="videoPlayer" style="display:none;">
+                <div class="video-container">
+                    <video id="player" class="video-js vjs-big-play-centered" controls preload="auto"></video>
+                </div>
+                
+                <div id="videoInfo" class="info-section"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="api-info">
+                <h3>🔧 API エンドポイント</h3>
+                <p>M3U8マニフェスト: <code>GET /api/manifest/{videoId}.m3u8</code></p>
+                <p>動画情報: <code>GET /api/info/{videoId}</code></p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script>
+        let player = null;
+        
+        function extractVideoId(input) {
+            input = input.trim();
+            
+            // Already a video ID
+            if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
+                return input;
+            }
+            
+            // YouTube URL patterns
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
+            ];
+            
+            for (const pattern of patterns) {
+                const match = input.match(pattern);
+                if (match) return match[1];
+            }
+            
+            return null;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        async function loadVideo() {
+            const input = document.getElementById('videoInput').value;
+            const videoId = extractVideoId(input);
+            
+            if (!videoId) {
+                showError('有効なYouTube動画IDまたはURLを入力してください');
+                return;
+            }
+            
+            hideError();
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('videoPlayer').style.display = 'none';
+            
+            try {
+                // Get video info
+                const infoResponse = await fetch(`/api/info/${videoId}`);
+                if (!infoResponse.ok) throw new Error('動画情報の取得に失敗しました');
+                const info = await infoResponse.json();
+                
+                // Initialize or reset player
+                if (player) {
+                    player.dispose();
+                }
+                
+                const videoElement = document.getElementById('player');
+                player = videojs(videoElement, {
+                    controls: true,
+                    autoplay: false,
+                    preload: 'auto',
+                    fluid: true,
+                    sources: [{
+                        src: `/api/manifest/${videoId}.m3u8`,
+                        type: 'application/x-mpegURL'
+                    }]
+                });
+                
+                // Display video info
+                const infoHtml = `
+                    <div class="info-item">
+                        <strong>タイトル</strong>
+                        <span>${info.title || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>投稿者</strong>
+                        <span>${info.author || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>再生時間</strong>
+                        <span>${formatDuration(info.duration)}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>再生回数</strong>
+                        <span>${formatNumber(info.viewCount)}</span>
+                    </div>
+                `;
+                
+                document.getElementById('videoInfo').innerHTML = infoHtml;
+                document.getElementById('videoPlayer').style.display = 'block';
+                
+            } catch (error) {
+                showError(`エラー: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        function loadExample(videoId) {
+            document.getElementById('videoInput').value = videoId;
+            loadVideo();
+        }
+        
+        function formatDuration(seconds) {
+            if (!seconds) return 'N/A';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function formatNumber(num) {
+            if (!num) return 'N/A';
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        // Enter key support
+        document.getElementById('videoInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadVideo();
+            }
+        });
+    </script>
+</body>
+</html>
