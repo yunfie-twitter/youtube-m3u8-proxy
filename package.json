@@ -1,13 +1,14 @@
 {
   "name": "youtube-m3u8-proxy",
-  "version": "2.0.0",
-  "description": "YouTube M3U8/HLS proxy server with hybrid youtube.js + yt-dlp strategy",
-  "main": "src/server-hybrid.js",
+  "version": "2.1.0",
+  "description": "YouTube M3U8/HLS proxy with race-based redundant extraction (youtube.js + yt-dlp)",
+  "main": "src/server-race.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server-hybrid.js",
+    "start": "node src/server-race.js",
+    "start:hybrid": "node src/server-hybrid.js",
     "start:basic": "node src/server.js",
-    "dev": "node --watch src/server-hybrid.js",
+    "dev": "node --watch src/server-race.js",
     "docker:build": "docker build -t youtube-m3u8-proxy .",
     "docker:run": "docker run -p 3000:3000 youtube-m3u8-proxy",
     "compose:up": "docker-compose up -d",
@@ -24,7 +25,9 @@
     "video",
     "youtubei.js",
     "yt-dlp",
-    "hybrid"
+    "hybrid",
+    "race",
+    "redundancy"
   ],
   "author": "yunfie",
   "license": "MIT",
