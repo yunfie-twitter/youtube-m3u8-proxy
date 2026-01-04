@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![Python Version](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![Deno Version](https://img.shields.io/badge/deno-%3E%3D2.0.0-black)](https://deno.land/)
 
 YouTube動画をM3U8/HLS形式でストリーミング配信する**冗長化プロキシサーバー**。複数の抽出手法を**レース方式**で並列実行し、最も速く成功したものを採用することで、**高速性と信頼性を両立**します。
 
@@ -11,12 +12,12 @@ YouTube動画をM3U8/HLS形式でストリーミング配信する**冗長化プ
 ```
 Client Request
     ↓
-┌─────────────────────────────────────────────┐
+┌───────────────────────────────────────────────┐
 │  Race Controller (Promise.race)            │
 │  → 最初に成功した結果を即座に返す            │
-└─────────────────────────────────────────────┘
+└───────────────────────────────────────────────┘
     ↓ (並列実行)
-    ├─────────────────┐
+    ├──────────────────┐
     │                 │
     ↓                 ↓
 ┌─────────────┐  ┌──────────────┐
@@ -29,7 +30,7 @@ Client Request
     ↓                 ↓
 ┌─────────────┐  ┌──────────────┐
 │ youtube.js  │  │   yt-dlp     │
-│    (TV)     │  │              │
+│    (TV)     │  │   + Deno     │
 │             │  │              │
 │ 高品質      │  │ 最確実       │
 │ 300-600ms   │  │ 1-3秒        │
@@ -55,7 +56,11 @@ Client Request
 | **1** | youtube.js (Web) | 最速・最も汎用的 | 200-400ms | 90% |
 | **2** | youtube.js (Android) | モバイル最適化 | 250-500ms | 85% |
 | **3** | youtube.js (TV) | 高品質ストリーム | 300-600ms | 80% |
-| **4** | yt-dlp | 最も確実 | 1-3秒 | 95% |
+| **4** | yt-dlp + Deno | 最も確実 | 1-3秒 | 95% |
+
+### 🆕 Deno対応
+
+**yt-dlp 2025.11.12以降、YouTubeの動画抽出にDenoが必須になりました**[公式アナウンス](https://github.com/yt-dlp/yt-dlp/issues/14404)。本プロジェクトのDockerイメージには自動的にDenoが含まれています。
 
 ## 🏗️ アーキテクチャ
 
@@ -74,7 +79,7 @@ Client Request
 | **Innertube (Web)** | 高速抽出 | youtube.js |
 | **Innertube (Android)** | 代替抽出 | youtube.js |
 | **Innertube (TV)** | 高品質抽出 | youtube.js |
-| **yt-dlp Service** | 確実な抽出 | Python + FastAPI |
+| **yt-dlp Service** | 確実な抽出 | Python + FastAPI + **Deno** |
 | **Redis** | 結果キャッシュ | Redis 7 |
 
 ## 🚀 クイックスタート
@@ -103,21 +108,51 @@ docker-compose down
 #### 必要環境
 - Node.js >= 18.0.0
 - Python >= 3.11
+- **Deno >= 2.0.0** (yt-dlp用)
 - Redis
 
+#### ステップ1: Denoのインストール
+
+**Windows:**
 ```bash
-# Redis起動
+winget install --id=DenoLand.Deno
+```
+
+**macOS/Linux:**
+```bash
+curl -fsSL https://deno.land/install.sh | sh
+```
+
+**インストール確認:**
+```bash
+deno --version
+```
+
+#### ステップ2: Redis起動
+
+```bash
+# Dockerを使用
 docker run -d -p 6379:6379 redis:7-alpine
 
-# yt-dlp API起動
+# または、ローカルインストール
+redis-server
+```
+
+#### ステップ3: yt-dlp API起動
+
+```bash
 cd ytdlp-service
 pip install -r requirements.txt
-python app.py &
+python app.py
+# → http://localhost:8080 で起動
+```
 
-# Node.js API起動
-cd ..
+#### ステップ4: Node.js API起動
+
+```bash
 npm install
-npm start
+PORT=3000 YTDLP_API_URL=http://localhost:8080 npm start
+# → http://localhost:3000 で起動
 ```
 
 ## 📖 使い方
@@ -176,7 +211,7 @@ GET /health
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-01-04T05:17:00.000Z",
+  "timestamp": "2026-01-04T05:25:00.000Z",
   "services": {
     "innertubeWeb": true,
     "innertubeAndroid": true,
@@ -187,26 +222,23 @@ GET /health
 }
 ```
 
+**yt-dlpサービスのヘルスチェック:**
+```bash
+curl http://localhost:8080/health
+
+# Response:
+{
+  "status": "ok",
+  "timestamp": "2026-01-04T05:25:00.000Z",
+  "version": "2025.1.4",
+  "deno_available": true
+}
+```
+
 #### 4. 統計情報
 
 ```
 GET /api/stats
-```
-
-**レスポンス例:**
-```json
-{
-  "cacheSize": 128,
-  "cacheTTL": 3600,
-  "raceTimeout": 10000,
-  "redisStatus": "ready",
-  "extractors": [
-    "youtube.js-web",
-    "youtube.js-android",
-    "youtube.js-tv",
-    "yt-dlp"
-  ]
-}
 ```
 
 #### 5. キャッシュクリア
@@ -232,14 +264,6 @@ DELETE /api/cache/{videoId}
 </script>
 ```
 
-#### HLS.js
-
-```javascript
-const hls = new Hls();
-hls.loadSource('http://localhost:3000/api/manifest/dQw4w9WgXcQ.m3u8');
-hls.attachMedia(document.getElementById('video'));
-```
-
 ## ⚙️ 設定
 
 ### 環境変数
@@ -255,18 +279,6 @@ REDIS_HOST=redis             # Redisホスト
 REDIS_PORT=6379              # Redisポート
 ```
 
-### レースタイムアウト調整
-
-レースタイムアウトは、すべての抽出手法が完了するまでの最大待機時間です。
-
-```bash
-# 高速だが失敗しやすい設定 (5秒)
-RACE_TIMEOUT=5000 npm start
-
-# 確実性重視の設定 (15秒)
-RACE_TIMEOUT=15000 npm start
-```
-
 ## 📊 パフォーマンス
 
 ### ベンチマーク (目安)
@@ -279,21 +291,6 @@ RACE_TIMEOUT=15000 npm start
 | TV勝利 | 300-600ms | 80%+ |
 | yt-dlp勝利 | 1-3秒 | 95%+ |
 | **総合** | **平均 350ms** | **99%+** |
-
-### レース方式の優位性
-
-**従来のフォールバック方式:**
-```
-Web (失敗) → Android (失敗) → TV (失敗) → yt-dlp (成功)
-= 合計 5秒以上
-```
-
-**レース方式:**
-```
-Web + Android + TV + yt-dlp (並列)
-→ 最初の成功 (例: Web 324ms)
-= 合計 324ms
-```
 
 ## 🐳 Docker
 
@@ -310,82 +307,13 @@ CMD ["node", "src/server-hybrid.js"]
 CMD ["node", "src/server.js"]
 ```
 
-### コマンド
-
-```bash
-# 起動
-docker-compose up -d
-
-# 特定サービスのログ
-docker-compose logs -f api
-
-# 再起動
-docker-compose restart api
-
-# 停止
-docker-compose down
-
-# リビルド
-docker-compose up -d --build
-```
-
-## 🛠️ 開発
-
-### ローカル開発
-
-```bash
-# ホットリロード付きで起動
-npm run dev
-
-# レースモード
-npm start
-
-# ハイブリッドモード
-npm run start:hybrid
-
-# ベーシックモード
-npm run start:basic
-```
-
-## 🔍 トラブルシューティング
-
-### すべての手法が失敗する場合
-
-1. ヘルスチェックを確認
-```bash
-curl http://localhost:3000/health
-```
-
-2. 各サービスのログを確認
-```bash
-docker-compose logs api
-docker-compose logs ytdlp
-```
-
-3. Redisの状態を確認
-```bash
-docker-compose exec redis redis-cli ping
-```
-
-### レースタイムアウトが発生する場合
-
-環境変数 `RACE_TIMEOUT` を増やしてください:
-
-```yaml
-# docker-compose.yml
-services:
-  api:
-    environment:
-      - RACE_TIMEOUT=15000  # 15秒に延長
-```
-
 ## ⚠️ 注意事項
 
 - このツールは教育目的で作成されています
 - YouTube利用規約に従って使用してください
 - 商用利用する場合は適切なライセンスを確認してください
 - 大量のリクエストを送信しないでください
-- サーバーリソースを適切に管理してください
+- **yt-dlp 2025.11.12以降、Denoが必須です**
 
 ## 🤝 コントリビューション
 
@@ -405,6 +333,7 @@ MITライセンスの下で公開されています。詳細は[LICENSE](LICENSE
 
 - [YouTube.js](https://github.com/LuanRT/YouTube.js) - 素晴らしいYouTubeクライアントライブラリ
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - 信頼性の高い動画ダウンローダー
+- [Deno](https://deno.land/) - モダンで安全なJavaScriptランタイム
 - [Fastify](https://www.fastify.io/) - 高速で効率的なWebフレームワーク
 - [FastAPI](https://fastapi.tiangolo.com/) - モダンなPython Webフレームワーク
 

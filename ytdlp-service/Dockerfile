@@ -2,13 +2,23 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install system dependencies including Deno
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
+    unzip \
     ffmpeg && \
+    # Install Deno (required for yt-dlp YouTube support)
+    curl -fsSL https://deno.land/install.sh | sh && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Add Deno to PATH
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
+
+# Verify Deno installation
+RUN deno --version
 
 # Install Python packages
 COPY requirements.txt .

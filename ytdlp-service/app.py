@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(
-    title="yt-dlp API Service",
-    description="Persistent yt-dlp service for extracting YouTube m3u8 URLs",
-    version="1.0.0"
+    title="yt-dlp API Service (with Deno)",
+    description="Persistent yt-dlp service with Deno support for extracting YouTube m3u8 URLs",
+    version="1.1.0"
 )
 
 # CORS configuration
@@ -54,8 +54,25 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     version: str
+    deno_available: bool
 
-# yt-dlp options
+# Check if Deno is available
+def check_deno() -> bool:
+    """Check if Deno is installed and accessible"""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['deno', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except Exception as e:
+        logger.error(f"Deno check failed: {e}")
+        return False
+
+# yt-dlp options with Deno support
 def get_ytdlp_opts() -> Dict[str, Any]:
     return {
         'quiet': True,
@@ -66,6 +83,12 @@ def get_ytdlp_opts() -> Dict[str, Any]:
         'no_check_certificate': True,
         'cookiefile': None,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # Enable Deno for YouTube extraction (required as of 2025.11.12)
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+            }
+        },
     }
 
 async def extract_info_async(video_id: str) -> Dict[str, Any]:
@@ -78,6 +101,7 @@ async def extract_info_async(video_id: str) -> Dict[str, Any]:
         
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
+                logger.info(f"Extracting info for {video_id} with Deno support")
                 info = ydl.extract_info(url, download=False)
                 return info
         except Exception as e:
@@ -86,13 +110,23 @@ async def extract_info_async(video_id: str) -> Dict[str, Any]:
     
     return await loop.run_in_executor(None, _extract)
 
+@app.on_event("startup")
+async def startup_event():
+    """Check Deno availability on startup"""
+    deno_available = check_deno()
+    if deno_available:
+        logger.info("✓ Deno is installed and available for yt-dlp")
+    else:
+        logger.warning("⚠️ Deno is not available - YouTube extraction may be limited")
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with Deno status"""
     return HealthResponse(
         status="ok",
         timestamp=datetime.utcnow().isoformat(),
-        version=yt_dlp.version.__version__
+        version=yt_dlp.version.__version__,
+        deno_available=check_deno()
     )
 
 @app.get("/api/extract/{video_id}", response_model=VideoInfo)
@@ -211,6 +245,13 @@ async def get_formats(video_id: str):
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8080))
     workers = int(os.environ.get('WORKERS', 4))
+    
+    # Check Deno on startup
+    if check_deno():
+        print("✓ Deno is available for yt-dlp")
+    else:
+        print("⚠️ Warning: Deno is not installed - YouTube extraction may be limited")
+        print("   Install Deno: https://deno.land/")
     
     uvicorn.run(
         "app:app",
